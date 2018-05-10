@@ -43,6 +43,7 @@ tools = [
     },
 ]
 
+# Define all the materials which are relevant to you.
 materials = OrderedDict([
     ('Aluminum', {
         'SFM': 300 * (ureg.ft / ureg.min),
@@ -63,6 +64,10 @@ materials = OrderedDict([
     ('4140 Steel, hardened', {
         'SFM': 30 * (ureg.ft / ureg.min),
         'unit_power': 2.6 * (ureg.hp / (ureg.inch**3 / ureg.min)),
+    }),
+    ('304 Stainless', {
+        'SFM': 50 * (ureg.ft / ureg.min),
+        'unit_power': 1.8 * (ureg.hp / (ureg.inch**3 / ureg.min)),
     }),
 ])
 
