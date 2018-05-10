@@ -3,21 +3,27 @@
 import pint
 from math import pi
 import matplotlib
+matplotlib.use('PDF')
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import OrderedDict
+from fractions import Fraction
+
 
 ureg = pint.UnitRegistry()
 ureg.define('revolution = 6.2831853 * radian = rev')
 
-# tool properties (for 3/4" 4 flute endmill)
-tool_diameter = 0.75 * ureg.inch
-tooth_count = 4 * (1 / ureg.rev)
+MAX_DOC_AXIAL = 1.3  # multiple of tool diameter
 
 tools = [
     {
         'diameter': 3/4 * ureg.inch,
         'tooth_count': 4 * (1 / ureg.rev),
+        'material': 'hss',
+    },
+    {
+        'diameter': 3/8 * ureg.inch,
+        'tooth_count': 2 * (1 / ureg.rev),
         'material': 'hss',
     },
     {
@@ -61,16 +67,19 @@ machine_efficiency = 0.75  # dimensionless fraction
 
 for tool in tools:
     # X axis values
-    doc_axial = np.arange(0.0, tool_diameter.to(ureg.inch).magnitude + 0.01, 0.01) * ureg.inch
+    doc_axial = np.arange(0.0, MAX_DOC_AXIAL * tool['diameter'].to(ureg.inch).magnitude + 0.01, 0.01) * ureg.inch
     
     fig, ax = plt.subplots()
     
     for material_name, material_properties in materials.items():
-        RPM = material_properties['SFM'] / ( pi * tool_diameter / ureg.rev )
-        IPM = 0.005 * tool_diameter * RPM * tooth_count
+        SFM = material_properties['SFM']
+        if tool['material'] is 'carbide':
+            SFM *= 2.0
+        RPM = SFM / ( pi * tool['diameter'] / ureg.rev )
+        IPM = 0.005 * tool['diameter'] * RPM * tool['tooth_count']
         MRR = horsepower_motor * machine_efficiency / material_properties['unit_power']
         doc_radial = MRR / IPM / doc_axial
-        stepover = 100 * (doc_radial / tool_diameter).to(ureg.dimensionless)
+        stepover = 100 * (doc_radial / tool['diameter']).to(ureg.dimensionless)
     
         ax.plot(doc_axial, stepover, label='{}: {:.0f} RPM, {:.1f} IPM'.format(
             material_name,
@@ -81,14 +90,30 @@ for tool in tools:
     ax.legend()
     
     ax.set(xlabel='DOC, Axial (inch)', ylabel='Stepover (percent)',
-           title='Milling Parameters, {:.2f} hp, {:.2f}" {:d} fl HSS End Mill'.format(
+           title='Milling Parameters, {:.2f} hp, {}" {:d} fl {} End Mill'.format(
                horsepower_motor.magnitude,
-               tool_diameter.magnitude,
-               int(tooth_count.magnitude),
+               Fraction(tool['diameter'].magnitude).limit_denominator(),
+               int(tool['tooth_count'].magnitude),
+               tool['material'],
                ))
-    ax.set_xlim(0, tool_diameter.to(ureg.inch).magnitude)
+    ax.set_xlim(0, MAX_DOC_AXIAL * tool['diameter'].to(ureg.inch).magnitude)
     ax.set_ylim(0, 100)
     ax.set_yticks(np.arange(0, 101, step=5))
     ax.grid()
+
+    ax2 = ax.twinx()
+    ax2.set_ylim(0, tool['diameter'].magnitude)
+    yticks = np.arange(0, tool['diameter'].magnitude*1.05, step=tool['diameter'].magnitude*0.05)
+    ax2.set_yticks(yticks)
+    ax2.set_yticklabels(['{:.3f}" [{:.2f}]'.format(tick, (tick * ureg.inch).to(ureg.mm).magnitude) for tick in yticks])
+    ax2.set_ylabel('Stepover (inch/mm)')
+
+    fig.tight_layout()  # otherwise the right y-label is slightly clipped
     
-    plt.show()
+    fig.savefig("speeds_and_feeds_{:.2f}hp_{:.3f}in_{:d}fl_{}_endmill.pdf".format(
+        horsepower_motor.magnitude,
+        tool['diameter'].magnitude,
+        int(tool['tooth_count'].magnitude),
+        tool['material'],
+        ))
+    #plt.show()
