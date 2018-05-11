@@ -48,26 +48,38 @@ materials = OrderedDict([
     ('Aluminum', {
         'SFM': 300 * (ureg.ft / ureg.min),
         'unit_power': 0.4 * (ureg.hp / (ureg.inch**3 / ureg.min)),
+        'color': 'xkcd:blue',
+        'linestyle': '-',
     }),
     ('Mild Steel', {
         'SFM': 100 * (ureg.ft / ureg.min),
         'unit_power': 1.8 * (ureg.hp / (ureg.inch**3 / ureg.min)),
+        'color': 'xkcd:red',
+        'linestyle': '-',
     }),
     ('4130 Steel', {
         'SFM': 80 * (ureg.ft / ureg.min),
         'unit_power': 2.2 * (ureg.hp / (ureg.inch**3 / ureg.min)),
+        'color': 'xkcd:blue',
+        'linestyle': '--',
     }),
     ('4140 Steel, annealed', {
         'SFM': 60 * (ureg.ft / ureg.min),
         'unit_power': 2.2 * (ureg.hp / (ureg.inch**3 / ureg.min)),
+        'color': 'xkcd:green',
+        'linestyle': '--',
     }),
     ('4140 Steel, hardened', {
         'SFM': 30 * (ureg.ft / ureg.min),
         'unit_power': 2.6 * (ureg.hp / (ureg.inch**3 / ureg.min)),
+        'color': 'xkcd:red',
+        'linestyle': '--',
     }),
     ('304 Stainless', {
         'SFM': 50 * (ureg.ft / ureg.min),
         'unit_power': 1.8 * (ureg.hp / (ureg.inch**3 / ureg.min)),
+        'color': 'xkcd:black',
+        'linestyle': '-.',
     }),
 ])
 
@@ -89,7 +101,7 @@ machines = [
         'name': 'Sharp LMV CNC Mill',
         'horsepower': 3.0 * ureg.hp,
         'feed_max': 60 * ureg.inch / ureg.min,
-        'vari_speed_max': 4000 * ureg.rev / ureg.min,
+        'vari_speed_max': 3000 * ureg.rev / ureg.min,
     },
     {
         'name': 'Bridgeport J-Head Mill',
@@ -126,7 +138,15 @@ for machine in machines:
             # X axis values
             doc_axial = np.arange(0.0, MAX_DOC_AXIAL * tool['diameter'].to(ureg.inch).magnitude + 0.01, 0.01) * ureg.inch
 
-            fig, ax = plt.subplots(figsize=(9, 8))
+            fig, ax = plt.subplots(figsize=(10, 8))
+
+            # Add vertical line which represents 1D axial DOC for visual
+            # reference.
+            ax.axvline(tool['diameter'].to(ureg.inch).magnitude, color='black', linestyle='--', linewidth=1.0)
+            ax_top = ax.twiny()
+            ax_top.set_xlim(0, MAX_DOC_AXIAL * tool['diameter'].to(ureg.inch).magnitude)
+            ax_top.set_xticks([tool['diameter'].to(ureg.inch).magnitude])
+            ax_top.set_xticklabels(['1D'])
 
             # Plot a new line for each different type of material.
             for material_name, material_properties in materials.items():
@@ -151,21 +171,30 @@ for machine in machines:
                 doc_radial = MRR / feed / doc_axial
                 stepover = 100 * (doc_radial / tool['diameter']).to(ureg.dimensionless)
 
-                ax.plot(doc_axial, stepover, label='{}: {:.0f} RPM, {:.1f} IPM'.format(
-                    material_name,
-                    speed.to(ureg.rev / ureg.min).magnitude,
-                    feed.to(ureg.inch / ureg.min).magnitude,
-                    ))
+                ax.plot(
+                    doc_axial,
+                    stepover,
+                    label='{}: {:.0f} RPM, {:.1f} IPM'.format(
+                        material_name,
+                        speed.to(ureg.rev / ureg.min).magnitude,
+                        feed.to(ureg.inch / ureg.min).magnitude,
+                    ),
+                    color=material_properties['color'],
+                    linestyle=material_properties['linestyle'],
+                )
 
             ax.legend()
 
-            ax.set(xlabel='DOC, Axial (inch)', ylabel='Stepover (%)',
-                   title='Milling Parameters, {:.2f} hp, {}" {:d} fl. {} End Mill'.format(
-                       target_spindle_horsepwoer(machine).magnitude,
-                       Fraction(tool['diameter'].magnitude).limit_denominator(),
-                       int(tool['tooth_count']),
-                       tool['material'],
-                       ))
+            ax.set(xlabel='DOC, Axial (inch)', ylabel='Max Stepover (%)')
+            ax.set_title(
+                'Milling Parameters, {:.2f} hp, {}" {:d} fl. {} End Mill'.format(
+                    target_spindle_horsepwoer(machine).magnitude,
+                    Fraction(tool['diameter'].magnitude).limit_denominator(),
+                    int(tool['tooth_count']),
+                    tool['material'],
+                ),
+                y=1.05, # this just manually places the title to not overlap with the top ticks.
+            )
 
             # X limits are proportional to tool diameter.
             ax.set_xlim(0, MAX_DOC_AXIAL * tool['diameter'].to(ureg.inch).magnitude)
@@ -193,16 +222,16 @@ for machine in machines:
             ax.grid()
 
             # Setup secondary axis on right side of graph to show physical stepover.
-            ax2 = ax.twinx()
-            ax2.set_ylim(0, tool['diameter'].magnitude)
+            ax_right = ax.twinx()
+            ax_right.set_ylim(0, tool['diameter'].magnitude)
             yticks = np.arange(0, tool['diameter'].magnitude*1.05, step=tool['diameter'].magnitude*0.05)
-            ax2.set_yticks(yticks)
-            ax2.set_yticklabels([
+            ax_right.set_yticks(yticks)
+            ax_right.set_yticklabels([
                 '{:.3f} [{:.2f}]'.format(
                     tick,
                     (tick * ureg.inch).to(ureg.mm).magnitude
                 ) for tick in yticks])
-            ax2.set_ylabel('Physical Stepover (inch [mm])')
+            ax_right.set_ylabel('Max Stepover (inch [mm])')
 
             fig.tight_layout()  # otherwise the right y-label is slightly clipped
             pdf.savefig(fig)
