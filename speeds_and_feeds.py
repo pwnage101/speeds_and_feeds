@@ -22,14 +22,39 @@ MAX_DOC_AXIAL = 1.5
 # Define your tools here.
 tools = [
     {
+        'diameter': 2.0 * ureg.inch,
+        'tooth_count': 1,
+        'material': 'HSS/Cobalt',
+    },
+    {
         'diameter': 3/4 * ureg.inch,
         'tooth_count': 4,
-        'material': 'HSS',
+        'material': 'HSS/Cobalt',
+    },
+    {
+        'diameter': 5/8 * ureg.inch,
+        'tooth_count': 4,
+        'material': 'HSS/Cobalt',
+    },
+    {
+        'diameter': 1/2 * ureg.inch,
+        'tooth_count': 4,
+        'material': 'HSS/Cobalt',
+    },
+    {
+        'diameter': 1/2 * ureg.inch,
+        'tooth_count': 4,
+        'material': 'Carbide',
+    },
+    {
+        'diameter': 3/8 * ureg.inch,
+        'tooth_count': 4,
+        'material': 'Carbide',
     },
     {
         'diameter': 3/8 * ureg.inch,
         'tooth_count': 2,
-        'material': 'HSS',
+        'material': 'HSS/Cobalt',
     },
     {
         'diameter': 3/8 * ureg.inch,
@@ -50,50 +75,56 @@ materials = OrderedDict([
         'unit_power': 0.4 * (ureg.hp / (ureg.inch**3 / ureg.min)),
         'color': 'xkcd:blue',
         'linestyle': '-',
+        'linewidth': 1.5,
     }),
     ('Mild Steel', {
         'SFM': 100 * (ureg.ft / ureg.min),
         'unit_power': 1.8 * (ureg.hp / (ureg.inch**3 / ureg.min)),
         'color': 'xkcd:red',
         'linestyle': '-',
+        'linewidth': 1.5,
     }),
     ('4130 Steel', {
         'SFM': 80 * (ureg.ft / ureg.min),
         'unit_power': 2.2 * (ureg.hp / (ureg.inch**3 / ureg.min)),
         'color': 'xkcd:blue',
         'linestyle': '--',
+        'linewidth': 2.0,
     }),
     ('4140 Steel, annealed', {
         'SFM': 60 * (ureg.ft / ureg.min),
-        'unit_power': 2.2 * (ureg.hp / (ureg.inch**3 / ureg.min)),
-        'color': 'xkcd:green',
+        'unit_power': 2.3 * (ureg.hp / (ureg.inch**3 / ureg.min)),
+        'color': 'xkcd:red',
         'linestyle': '--',
+        'linewidth': 1.5,
     }),
     ('4140 Steel, hardened', {
         'SFM': 30 * (ureg.ft / ureg.min),
         'unit_power': 2.6 * (ureg.hp / (ureg.inch**3 / ureg.min)),
-        'color': 'xkcd:red',
+        'color': 'xkcd:green',
         'linestyle': '--',
+        'linewidth': 1.5,
     }),
     ('304 Stainless', {
         'SFM': 50 * (ureg.ft / ureg.min),
         'unit_power': 1.8 * (ureg.hp / (ureg.inch**3 / ureg.min)),
         'color': 'xkcd:black',
         'linestyle': '-.',
+        'linewidth': 1.5,
     }),
 ])
 
-# machine properties
-
 # This multiplier gives us our safety buffer.  We're trying to operate the
-# machine within the max ratings, so any calculation errors due to
-# poor approximations won't overload the motor and cause stalls or reduce
+# machine below the max ratings, so any calculation errors due to poor
+# approximations won't overload the motor and cause stalls/breakages or reduce
 # machine/tool lifespan.
 machine_horsepower_multiplier = 0.5
 
-# Represents the fact that the motor doesn't perfectly transfer power to the
-# spindle.  There are always friction losses at the belt, and inside the motor
-# and spindle bearings.
+# This number represents the faction of the power transmitted to the tool
+# (milling) or part (turning).  The machine's transmission isn't ideal; there
+# are always friction losses inside the motor, belt, spindle bearings, and
+# other miscellaneous things such as the tailstock bearings and power feed
+# gears/screws.
 machine_efficiency = 0.75
 
 machines = [
@@ -124,9 +155,6 @@ def closest_machine_speed(speed, machine):
         else:
             return speed
 
-def target_spindle_horsepwoer(machine):
-    return machine['horsepower'] * machine_horsepower_multiplier * machine_efficiency
-
 for machine in machines:
 
     machine_filename_suffix = machine['name'].replace(' ', '_')
@@ -138,15 +166,15 @@ for machine in machines:
             # X axis values
             doc_axial = np.arange(0.0, MAX_DOC_AXIAL * tool['diameter'].to(ureg.inch).magnitude + 0.01, 0.01) * ureg.inch
 
-            fig, ax = plt.subplots(figsize=(10, 8))
+            fig, ax = plt.subplots(figsize=(11.0, 8.0))
 
             # Add vertical line which represents 1D axial DOC for visual
             # reference.
-            ax.axvline(tool['diameter'].to(ureg.inch).magnitude, color='black', linestyle='--', linewidth=1.0)
+            #ax.axvline(tool['diameter'].to(ureg.inch).magnitude, color='black', linestyle='--', linewidth=1.0)
             ax_top = ax.twiny()
             ax_top.set_xlim(0, MAX_DOC_AXIAL * tool['diameter'].to(ureg.inch).magnitude)
-            ax_top.set_xticks([tool['diameter'].to(ureg.inch).magnitude])
-            ax_top.set_xticklabels(['1D'])
+            ax_top.set_xticks([tool['diameter'].to(ureg.inch).magnitude, 1.5 * tool['diameter'].to(ureg.inch).magnitude])
+            ax_top.set_xticklabels(['1D', '1.5D'])
 
             # Plot a new line for each different type of material.
             for material_name, material_properties in materials.items():
@@ -158,7 +186,7 @@ for machine in machines:
                 # conservative estimate.  In production environments, some people
                 # are running carbide 4-5x.
                 if tool['material'] is 'Carbide':
-                    SFM *= 2.0
+                    SFM *= 2.5
 
                 speed = SFM / ( pi * tool['diameter'] / ureg.rev )
                 speed = closest_machine_speed(speed, machine)
@@ -167,28 +195,32 @@ for machine in machines:
                 if feed > machine['feed_max']:
                     feed = machine['feed_max']
 
-                MRR = target_spindle_horsepwoer(machine) * machine_efficiency / material_properties['unit_power']
+                target_spindle_horsepower = machine['horsepower'] * machine_horsepower_multiplier * machine_efficiency
+                MRR = target_spindle_horsepower / material_properties['unit_power']
                 doc_radial = MRR / feed / doc_axial
                 stepover = 100 * (doc_radial / tool['diameter']).to(ureg.dimensionless)
 
                 ax.plot(
                     doc_axial,
                     stepover,
-                    label='{}: {:.0f} RPM, {:.1f} IPM'.format(
+                    label='{}: {:.0f} RPM, {:.0f} IPM'.format(
                         material_name,
                         speed.to(ureg.rev / ureg.min).magnitude,
                         feed.to(ureg.inch / ureg.min).magnitude,
                     ),
                     color=material_properties['color'],
                     linestyle=material_properties['linestyle'],
+                    linewidth=material_properties['linewidth'],
                 )
 
             ax.legend()
 
-            ax.set(xlabel='DOC, Axial (inch)', ylabel='Max Stepover (%)')
+            ax.set(xlabel='Axial DOC (inch [mm])', ylabel='Max Stepover (%)')
             ax.set_title(
-                'Milling Parameters, {:.2f} hp, {}" {:d} fl. {} End Mill'.format(
-                    target_spindle_horsepwoer(machine).magnitude,
+                'Rough Milling  •  {} {:.1f} hp, {:.0f}% load  •  {}" {:d} fl. {} End Mill'.format(
+                    machine['name'],
+                    machine['horsepower'].magnitude,
+                    machine_horsepower_multiplier * 100,
                     Fraction(tool['diameter'].magnitude).limit_denominator(),
                     int(tool['tooth_count']),
                     tool['material'],
@@ -212,10 +244,14 @@ for machine in machines:
                     tick_step *= 20
                     break
                 tick_step *= 10
-            ax.set_xticks(np.arange(0, ax.get_xlim()[1], tick_step))
-
+            xticks = np.arange(0, ax.get_xlim()[1], tick_step)
+            ax.set_xticks(xticks)
+            ax.set_xticklabels([
+                '{:.3f}\n[{:.2f}]'.format(tick, (tick * ureg.inch).to(ureg.mm).magnitude)
+                for tick in xticks
+            ])
             # Limit display up to 100% stepover since that's the entire diameter of
-            # the endmill (slot milling).
+            # the endmill (i.e. slot milling).
             ax.set_ylim(0, 100)
             ax.set_yticks(np.arange(0, 101, step=5))
 
@@ -231,7 +267,7 @@ for machine in machines:
                     tick,
                     (tick * ureg.inch).to(ureg.mm).magnitude
                 ) for tick in yticks])
-            ax_right.set_ylabel('Max Stepover (inch [mm])')
+            ax_right.set_ylabel('Radial DOC (inch [mm])')
 
             fig.tight_layout()  # otherwise the right y-label is slightly clipped
             pdf.savefig(fig)
